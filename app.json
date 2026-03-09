@@ -1,26 +1,30 @@
 {
   "expo": {
-    "name": "conversor-divisas",
-    "slug": "conversor-divisas",
+    "name": "FinanzasIA",
+    "slug": "finanzas-ia",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#013125"
     },
+    "assetBundlePatterns": ["**/*"],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.finanzasia.app"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "monochromeImage": "./assets/android-icon-monochrome.png",
+        "backgroundColor": "#013125"
       },
+      "package": "com.finanzasia.app",
+      "permissions": ["INTERNET", "ACCESS_NETWORK_STATE"],
       "predictiveBackGestureEnabled": false
     },
     "web": {
