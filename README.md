@@ -1,7 +1,5 @@
 # FinanzasAI - Conversor de Divisas en Tiempo Real
 
-![FinanzasAI](assets/icon.png)
-
 Aplicación móvil para convertir divisas con tasas actualizadas del **BCV (Banco Central de Venezuela)** y **Binance P2P**. Desarrollada con React Native (Expo).
 
 ---
@@ -186,7 +184,7 @@ rm -rf ~/.gradle/caches/
 
 # 📄 Licencia
 
-MIT © [Juan Oberto] — Libre para usar y modificar
+MIT ©Juan Oberto — Libre para usar y modificar
 
 ---
 
