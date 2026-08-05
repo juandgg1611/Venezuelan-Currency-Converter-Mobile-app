@@ -12,13 +12,19 @@ export interface BcvRates {
 
 export type CurrencyCode = "USD" | "EUR" | "USDT" | "VES";
 
-const BCV_API_KEY =
-  "a37f147c890a759b23ab7e7f3c3ea9b4d2c07e8fcb7572416ebafb24f552018f";
-const BCV_API_URL = "https://api.dolarvzla.com/public/exchange-rate";
+export interface HistoricalRate {
+  date: string; // "YYYY-MM-DD"
+  usd: number;
+  eur: number;
+}
+
+
+const BCV_API_URL = "https://rates.dolarvzla.com/bcv/current.json";
 const BINANCE_P2P_URL =
   "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search";
 
 const CACHE_KEY = "@exchange_rates_v4";
+const OFFLINE_CACHE_KEY = "@exchange_rates_offline_v1"; // caché permanente para modo sin conexión
 const CACHE_DURATION = 5 * 60 * 1000;
 
 const buildBinanceBody = () => ({
@@ -56,10 +62,10 @@ class BcvApiService {
 
   private async saveToCache(rates: BcvRates): Promise<void> {
     try {
-      await AsyncStorage.setItem(
-        CACHE_KEY,
-        JSON.stringify({ rates, savedAt: Date.now() })
-      );
+      const payload = JSON.stringify({ rates, savedAt: Date.now() });
+      await AsyncStorage.setItem(CACHE_KEY, payload);
+      // Guardar también en caché offline permanente (sin expiración)
+      await AsyncStorage.setItem(OFFLINE_CACHE_KEY, JSON.stringify({ rates, savedAt: Date.now() }));
     } catch (e) {
       console.log("❌ Cache save error:", e);
     }
@@ -80,6 +86,18 @@ class BcvApiService {
     }
   }
 
+  async getOfflineCache(): Promise<BcvRates | null> {
+    try {
+      const raw = await AsyncStorage.getItem(OFFLINE_CACHE_KEY);
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      console.log("📦 Rates from offline cache (sin conexión)");
+      return data.rates;
+    } catch (e) {
+      return null;
+    }
+  }
+
   // ==========================================
   // BCV: USD y EUR
   // ==========================================
@@ -92,7 +110,6 @@ class BcvApiService {
     const response = await fetch(BCV_API_URL, {
       method: "GET",
       headers: {
-        "x-dolarvzla-key": BCV_API_KEY,
         "Content-Type": "application/json",
       },
     });
@@ -142,7 +159,7 @@ class BcvApiService {
     const med = median(prices);
     const avg = prices.reduce((a, b) => a + b, 0) / prices.length;
     console.log(
-      `✅ Binance P2P: ${prices.length} anuncios | mediana=${med.toFixed(2)} | promedio=${avg.toFixed(2)}`
+      `✅ Binance P2P: ${prices.length} anuncios | mediana=${med.toFixed(2)} | promedio=${avg.toFixed(2)}`,
     );
 
     return med;
@@ -213,11 +230,25 @@ class BcvApiService {
         error: bcvError
           ? "USD/EUR usando valores locales"
           : usdt === 0
-          ? "No se pudo obtener precio de USDT"
-          : undefined,
+            ? "No se pudo obtener precio de USDT"
+            : undefined,
       };
     } catch (e) {
       console.error("❌ Error crítico:", e);
+      
+      // Intentar devolver el caché offline (última tasa conocida)
+      const offlineRates = await this.getOfflineCache();
+      if (offlineRates) {
+        console.log("📦 Usando caché offline como fallback");
+        return {
+          rates: {
+            ...offlineRates,
+            lastUpdated: offlineRates.lastUpdated + " (sin conexión)",
+          },
+          error: "Sin conexión. Mostrando última tasa conocida.",
+        };
+      }
+      
       const now = new Date().toLocaleDateString("es-VE", {
         day: "2-digit",
         month: "2-digit",
@@ -245,6 +276,55 @@ class BcvApiService {
   }
 
   // ==========================================
+  // TASAS HISTÓRICAS BCV
+  // ==========================================
+
+  async fetchHistoricalRates(
+    from: string,
+    to: string,
+  ): Promise<HistoricalRate[]> {
+    // La nueva API no soporta rangos directamente con from/to en un endpoint.
+    // Dado que la app consulta un solo día a la vez (from == to), optimizamos para ese caso.
+    const [year, month, day] = from.split("-");
+    const url = `https://rates.dolarvzla.com/bcv/${parseInt(year)}/${parseInt(month)}/${parseInt(day)}.json`;
+    
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+      if (!response.ok) {
+        if (response.status === 404) return []; // Feriado / no encontrado
+        throw new Error(`Historical API HTTP ${response.status}`);
+      }
+      const data = await response.json();
+      return [data as HistoricalRate];
+    } catch (error) {
+      console.error("Error fetching historical rates:", error);
+      return [];
+    }
+  }
+
+  // Convierte HistoricalRate del día seleccionado a BcvRates para reutilizar toda
+  // la lógica de conversión existente sin cambios
+  historicalToBcvRates(hist: HistoricalRate, currentUSDT: number): BcvRates {
+    const display = new Date(hist.date + "T12:00:00").toLocaleDateString(
+      "es-VE",
+      { day: "2-digit", month: "2-digit", year: "numeric" },
+    );
+    return {
+      USD: hist.usd,
+      EUR: hist.eur,
+      USDT: currentUSDT, // USDT no tiene historial BCV, usamos el actual
+      VES: 1.0,
+      lastUpdated: display,
+      usdtSource: "Binance (actual)",
+    };
+  }
+
+  // ==========================================
   // CONVERSIÓN
   // ==========================================
 
@@ -252,7 +332,7 @@ class BcvApiService {
     amount: string,
     from: CurrencyCode,
     to: CurrencyCode,
-    rates: BcvRates
+    rates: BcvRates,
   ): string {
     try {
       const num = parseFloat(amount);
@@ -270,7 +350,7 @@ class BcvApiService {
   getConversionRate(
     from: CurrencyCode,
     to: CurrencyCode,
-    rates: BcvRates
+    rates: BcvRates,
   ): string {
     try {
       if (from === to) return "1.00";

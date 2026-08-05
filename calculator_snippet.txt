@@ -1,0 +1,499 @@
+// ─── CALCULADORA ─────────────────────────────────────────────
+
+const CalculatorModal = ({
+
+  visible,
+
+  onClose,
+
+}: {
+
+  visible: boolean;
+
+  onClose: () => void;
+
+}) => {
+
+  const [display, setDisplay] = useState("0");
+
+  const [expression, setExpression] = useState("");
+
+  const [waitingForNext, setWaitingForNext] = useState(false);
+
+  const [justCalculated, setJustCalculated] = useState(false);
+
+
+
+  const slideAnim = useRef(new Animated.Value(600)).current;
+
+  const overlayOpacity = useRef(new Animated.Value(0)).current;
+
+  const [mounted, setMounted] = useState(false);
+
+
+
+  useEffect(() => {
+
+    if (visible) {
+
+      setMounted(true);
+
+      slideAnim.setValue(600);
+
+      overlayOpacity.setValue(0);
+
+      Animated.parallel([
+
+        Animated.spring(slideAnim, {
+
+          toValue: 0,
+
+          tension: 60,
+
+          friction: 11,
+
+          useNativeDriver: true,
+
+        }),
+
+        Animated.timing(overlayOpacity, {
+
+          toValue: 1,
+
+          duration: 280,
+
+          useNativeDriver: true,
+
+        }),
+
+      ]).start();
+
+    } else {
+
+      Animated.parallel([
+
+        Animated.timing(slideAnim, {
+
+          toValue: 600,
+
+          duration: 260,
+
+          useNativeDriver: true,
+
+        }),
+
+        Animated.timing(overlayOpacity, {
+
+          toValue: 0,
+
+          duration: 200,
+
+          useNativeDriver: true,
+
+        }),
+
+      ]).start(() 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+              {row.map((btn) => (
+
+                <TouchableOpacity
+
+                  key={btn.label}
+
+                  onPress={() => animPress(() => handleBtn(btn))}
+
+                  activeOpacity={0.75}
+
+                  style={[{
+
+                    flex: btn.flex ?? 1,
+
+                    height: 64,
+
+                    borderRadius: 18,
+
+                    justifyContent: "center",
+
+                    alignItems: "center",
+
+                    backgroundColor: getBtnBg(btn.type),
+
+                    borderWidth: 1,
+
+                    borderColor: getBtnBorder(btn.type),
+
+                  },
+
+                  btn.type === "equal" && {
+
+                    shadowColor: G.p100,
+
+                    shadowOpacity: 0.35,
+
+                    shadowRadius: 12,
+
+                    shadowOffset: { width: 0, height: 4 },
+
+                    elevation: 6,
+
+                  }
+
+                  ]}
+
+                >
+
+                  <Text
+
+                    style={{
+
+                      fontSize: btn.type === "equal" ? 28 : btn.label.length > 1 ? 17 : 24,
+
+                      fontWeight: "700",
+
+                      color: getBtnColor(btn.type),
+
+                    }}
+
+                  >
+
+                    {btn.label}
+
+                  </Text>
+
+                </TouchableOpacity>
+
+              ))}
+
+            </View>
+
+          ))}
+
+        </View>
+
+      </Animated.View>
+
+    </Modal>
+
+  );
+
+};
+
+
+
+// ─── PANTALLA PRINCIPAL ─────────────────────────────────────
+
+export default function HomeScreen() {
+
+  const [amount, setAmount] = useState("1");
+
+  const [fromCurrency, setFromCurrency] = useState<CurrencyCode>("USD");
+
+  const [toCurrency, setToCurrency] = useState<CurrencyCode>("VES");
+
+  const [rates, setRates] = useState<BcvRates | null>(null);
+
+  const [loading, setLoading] = useState(true);
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  const [calcVisible, setCalcVisible] = useState(false);
+
+  const [notificationsOn, setNotificationsOn] = useState(false);
+
+  const [error, setError] = useState<string | null>(null);
+
+  const [lastUpdate, setLastUpdate] = useState<string>("");
+
+  const [successToastVisible, setSuccessToastVisible] = useState(false);
+
+  const [successMessage, setSuccessMessage] = useState("");
+
+  const [fabLoading, setFabLoading] = useState(false);
+
+
+
+  
