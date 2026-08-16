@@ -555,6 +555,17 @@ export const CalendarModal = ({
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [mounted, setMounted] = useState(false);
+  const [monthStats, setMonthStats] = useState<any[] | null>(null);
+
+  useEffect(() => {
+    let cancel = false;
+    historyService.getHistory(viewYear, viewMonth + 1).then((data) => {
+      if (!cancel) setMonthStats(data);
+    }).catch(() => {
+      if (!cancel) setMonthStats(null);
+    });
+    return () => { cancel = true; };
+  }, [viewYear, viewMonth]);
 
   // Todos useNativeDriver: true — corre 100% en el UI thread nativo
   const slideAnim = useRef(new Animated.Value(420)).current;
@@ -664,6 +675,18 @@ export const CalendarModal = ({
     (day: number) =>
       day === todayD && viewMonth === todayM && viewYear === todayY,
     [viewYear, viewMonth],
+  );
+
+  const isBankHoliday = useCallback(
+    (day: number) => {
+      if (!monthStats) return false;
+      const dow = new Date(viewYear, viewMonth, day).getDay();
+      if (dow !== 1) return false; // Solo lunes
+      const ds = formatDateStr(day);
+      const snap = monthStats.find((s: any) => s.date === ds);
+      return snap && snap.usd === 0;
+    },
+    [monthStats, viewYear, viewMonth, formatDateStr]
   );
 
   const isSelected = useCallback(
@@ -915,6 +938,7 @@ export const CalendarModal = ({
                 }
                 const future = isFuture(day);
                 const weekend = isWeekend(day);
+                const bankHoliday = isBankHoliday(day);
                 const disabled = future; // fines de semana YA NO están deshabilitados
                 const sel = isSelected(day);
                 const tod = isToday(day);
@@ -960,14 +984,14 @@ export const CalendarModal = ({
                         >
                           {day}
                         </Text>
-                        {/* Puntito naranja sutil en fin de semana para indicar "usará lunes" */}
-                        {weekend && !sel && !future && (
+                        {/* Puntito indicador para fines de semana (naranja) o lunes bancarios (morado) */}
+                        {(weekend || bankHoliday) && !sel && !future && (
                           <View
                             style={{
-                              width: 3,
-                              height: 3,
-                              borderRadius: 1.5,
-                              backgroundColor: G.warning + "aa",
+                              width: 4,
+                              height: 4,
+                              borderRadius: 2,
+                              backgroundColor: bankHoliday ? "#a855f7" : G.warning + "aa",
                               position: "absolute",
                               bottom: 5,
                             }}
