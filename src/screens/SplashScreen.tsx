@@ -36,7 +36,7 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
       <View style={styles.content}>
         {/* Logo Animation */}
         <MotiView
-          from={{ opacity: 0, scale: 0.8, translateY: 20 }}
+          from={{ opacity: 1, scale: 0.8, translateY: 20 }}
           animate={{ opacity: 1, scale: 1, translateY: 0 }}
           transition={{ type: 'spring', damping: 14, stiffness: 100 }}
           style={styles.logoContainer}

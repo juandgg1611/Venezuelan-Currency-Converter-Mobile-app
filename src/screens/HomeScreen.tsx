@@ -670,12 +670,15 @@ export const CalendarModal = ({
     [formatDateStr, selectedDate],
   );
 
+  const isPrevDisabled = viewYear < 2023 || (viewYear === 2023 && viewMonth === 0);
+
   const prevMonth = useCallback(() => {
+    if (isPrevDisabled) return;
     if (viewMonth === 0) {
       setViewMonth(11);
       setViewYear((y) => y - 1);
     } else setViewMonth((m) => m - 1);
-  }, [viewMonth]);
+  }, [viewMonth, isPrevDisabled]);
 
   const nextMonth = useCallback(() => {
     if (viewYear === todayY && viewMonth === todayM) return;
@@ -1921,6 +1924,16 @@ export default function HomeScreen({ navigation }: any) {
     historicalDate && historicalRates ? historicalRates : rates;
   const isHistoricalMode = !!historicalDate && !!historicalRates;
 
+  const showUsdt = !isHistoricalMode || (historicalDate && new Date(historicalDate + "T12:00:00") >= new Date("2026-01-24T00:00:00") && (activeRates?.USDT ?? 0) > 0);
+  const availableCurrencies = CURRENCIES.filter(c => c !== "USDT" || showUsdt);
+
+  useEffect(() => {
+    if (!showUsdt) {
+      if (fromCurrency === "USDT") setFromCurrency("USD");
+      if (toCurrency === "USDT") setToCurrency("VES");
+    }
+  }, [showUsdt]);
+
   // Ref para captura de pantalla (exportar JPG)
   const resultBoxRef = useRef<View>(null);
 
@@ -2029,10 +2042,10 @@ export default function HomeScreen({ navigation }: any) {
       }
 
       const hist = histList[0];
-      const [y, m] = resolved.split("-").map(Number);
+      const [y, m] = dateStr.split("-").map(Number); // Fetch the month for the un-resolved date
       const historyMonth = await historyService.getHistory(y, m);
-      const usdtSnap = historyMonth.find(s => s.date === resolved);
-      const historicalUSDT = usdtSnap && usdtSnap.usdt > 0 ? usdtSnap.usdt : (rates?.USDT ?? 0);
+      const usdtSnap = historyMonth.find(s => s.date === dateStr);
+      const historicalUSDT = usdtSnap?.usdt || 0; // No fallback to live rates
 
       const converted = bcvApiService.historicalToBcvRates(hist, historicalUSDT);
 
@@ -2524,7 +2537,7 @@ export default function HomeScreen({ navigation }: any) {
         <FadeSlide delay={90} style={styles.conversorCard}>
           <Text style={styles.sectionLabel}>Convertir de</Text>
           <View style={styles.pillsRow}>
-            {CURRENCIES.map((c) => (
+            {availableCurrencies.map((c) => (
               <CurrencyPill
                 key={c}
                 currency={c}
@@ -2614,7 +2627,7 @@ export default function HomeScreen({ navigation }: any) {
 
           <Text style={styles.sectionLabel}>Convertir a</Text>
           <View style={styles.pillsRow}>
-            {CURRENCIES.map((c) => (
+            {availableCurrencies.map((c) => (
               <CurrencyPill
                 key={c}
                 currency={c}
@@ -2761,7 +2774,7 @@ export default function HomeScreen({ navigation }: any) {
               source={isHistoricalMode ? "BCV hist." : "BCV"}
               delay={180}
             />
-            {(!isHistoricalMode || activeRates.USDT > 0) && (
+            {showUsdt && (
               <RateCard
                 currency="USDT"
                 value={activeRates.USDT}

@@ -238,6 +238,13 @@ export default function CalendarScreen({ navigation }: any) {
   const [usdtSearch, setUsdtSearch] = useState("");
   const [usdtLoading, setUsdtLoading] = useState(false);
 
+  const canGoPrev = useMemo(() => {
+    if (activeCurrency === "USDT") {
+      return viewYear > 2026 || (viewYear === 2026 && viewMonth > 0);
+    }
+    return viewYear > 2023 || (viewYear === 2023 && viewMonth > 0);
+  }, [viewYear, viewMonth, activeCurrency]);
+
   const canGoNext = viewYear < today.getFullYear() || (viewYear === today.getFullYear() && viewMonth < today.getMonth());
 
   // Load heatmap on month change
@@ -358,6 +365,7 @@ export default function CalendarScreen({ navigation }: any) {
   }, [snapMap, viewYear, viewMonth, activeCurrency]);
 
   const goPrev = () => {
+    if (!canGoPrev) return;
     setViewMonth(m => { if (m === 0) { setViewYear(y => y - 1); return 11; } return m - 1; });
   };
   const goNext = () => {
@@ -393,7 +401,7 @@ export default function CalendarScreen({ navigation }: any) {
 
           {/* Month Nav */}
           <View style={s.monthNav}>
-            <TouchableOpacity onPress={goPrev} style={s.navBtn}>
+            <TouchableOpacity onPress={goPrev} disabled={!canGoPrev} style={[s.navBtn, !canGoPrev && { opacity: 0.3 }]}>
               <Ionicons name="chevron-back" size={20} color={G.t200} />
             </TouchableOpacity>
             <View style={s.monthTextContainer}>
