@@ -25,6 +25,7 @@ import {
   Modal,
   RefreshControl,
 } from "react-native";
+import { MotiView } from "moti";
 import { scheduleDailyRateNotifications, cancelDailyNotifications, areDailyNotificationsScheduled } from "../services/notifications";
 import {
   scheduleUsdtAlerts,
@@ -1856,6 +1857,7 @@ export default function HomeScreen({ navigation }: any) {
   const [amount, setAmount] = useState("1");
   const [fromCurrency, setFromCurrency] = useState<CurrencyCode>("USD");
   const [toCurrency, setToCurrency] = useState<CurrencyCode>("VES");
+  const [swapRotation, setSwapRotation] = useState(0);
   const [rates, setRates] = useState<BcvRates | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -2614,13 +2616,20 @@ export default function HomeScreen({ navigation }: any) {
           <View style={styles.swapRow}>
             <View style={styles.swapDivider} />
             <TouchableOpacity
-              style={[styles.swapBtn, { borderColor: G.p200 + "45" }]}
+              activeOpacity={0.8}
               onPress={() => {
                 setFromCurrency(toCurrency);
                 setToCurrency(fromCurrency);
+                setSwapRotation((r) => r + 180);
               }}
             >
-              <Ionicons name="swap-vertical" size={22} color={G.p200} />
+              <MotiView
+                animate={{ rotate: `${swapRotation}deg` }}
+                transition={{ type: "spring", damping: 14 }}
+                style={[styles.swapBtn, { borderColor: G.p200 + "45", backgroundColor: G.bg200 }]}
+              >
+                <Ionicons name="swap-vertical" size={22} color={G.p200} />
+              </MotiView>
             </TouchableOpacity>
             <View style={styles.swapDivider} />
           </View>
