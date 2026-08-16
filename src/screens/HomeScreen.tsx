@@ -708,6 +708,7 @@ export const CalendarModal = ({
 
   const prevMonth = useCallback(() => {
     if (isPrevDisabled) return;
+    setMonthStats(null);
     if (viewMonth === 0) {
       setViewMonth(11);
       setViewYear((y) => y - 1);
@@ -716,11 +717,12 @@ export const CalendarModal = ({
 
   const nextMonth = useCallback(() => {
     if (viewYear === todayY && viewMonth === todayM) return;
+    setMonthStats(null);
     if (viewMonth === 11) {
       setViewMonth(0);
       setViewYear((y) => y + 1);
     } else setViewMonth((m) => m + 1);
-  }, [viewMonth, viewYear]);
+  }, [viewMonth, viewYear, todayY, todayM]);
 
   const isNextDisabled = viewYear === todayY && viewMonth === todayM;
 
@@ -1989,6 +1991,9 @@ export default function HomeScreen({ navigation }: any) {
       }
     };
     loadPreferences();
+
+    // Precargar últimos 3 meses de historial para evitar flashes en calendarios
+    historyService.getHistoryForPeriod("3M").catch(() => {});
   }, []);
 
   useEffect(() => {
