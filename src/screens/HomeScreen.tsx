@@ -814,10 +814,12 @@ export const CalendarModal = ({
               width: 36,
               height: 36,
               borderRadius: 18,
-              backgroundColor: G.bg400,
+              backgroundColor: isPrevDisabled ? G.bg300 : G.bg400,
               justifyContent: "center",
               alignItems: "center",
+              opacity: isPrevDisabled ? 0.35 : 1,
             }}
+            disabled={isPrevDisabled}
           >
             <Ionicons name="chevron-back" size={18} color={G.p200} />
           </TouchableOpacity>
