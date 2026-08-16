@@ -1,11 +1,17 @@
 // src/services/notifications.ts
-// Servicio de notificaciones push locales para FinanzasIA
 import * as Notifications from "expo-notifications";
+import * as TaskManager from "expo-task-manager";
+import * as BackgroundFetch from "expo-background-fetch";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
-import { BcvRates } from "./api";
+import { bcvApiService, BcvRates } from "./api";
+import { notificationHistoryService } from "./notificationHistory";
 
-// ─── CONFIGURACIÓN DEL HANDLER ──────────────────────────────────
-// Controla cómo se muestra la notificación cuando la app está abierta en primer plano
+const TASK_NAME = "bcv-daily-check";
+const CHANNEL_ID = "finanzas-ia-daily";
+const ALERTS_ENABLED_KEY = "@bcv_alerts_enabled";
+const LAST_NOTIFIED_DATE_KEY = "@bcv_last_notified_date";
+
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,
@@ -15,11 +21,6 @@ Notifications.setNotificationHandler({
   }),
 });
 
-const CHANNEL_ID = "finanzas-ia-daily";
-const AM_ID = "daily-rates-8am";
-const PM_ID = "daily-rates-2pm";
-
-// ─── CONFIGURAR CANAL DE ANDROID ────────────────────────────────
 async function ensureChannel(): Promise<void> {
   if (Platform.OS === "android") {
     await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
@@ -32,7 +33,6 @@ async function ensureChannel(): Promise<void> {
   }
 }
 
-// ─── SOLICITAR PERMISOS ─────────────────────────────────────────
 export async function requestNotificationPermissions(): Promise<boolean> {
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
@@ -43,39 +43,103 @@ export async function requestNotificationPermissions(): Promise<boolean> {
   return finalStatus === 'granted';
 }
 
+async function checkAndNotifyBcv(): Promise<void> {
+  try {
+    const result = await bcvApiService.refreshRates();
+    const rates = result.rates;
+    if (!rates) return;
+
+    const lastNotified = await AsyncStorage.getItem(LAST_NOTIFIED_DATE_KEY);
+    const today = new Date().toISOString().split("T")[0];
+
+    // Only notify once per day when rates update
+    if (lastNotified === today) return;
+
+    await ensureChannel();
+
+    const usdStr = rates.USD > 0 ? rates.USD.toFixed(2) : "—";
+    const eurStr = rates.EUR > 0 ? rates.EUR.toFixed(2) : "—";
+    const usdtStr = rates.USDT > 0 ? rates.USDT.toFixed(2) : "—";
+
+    const title = "Actualización de Tasas 🇻🇪";
+    const body = `💵 Dólar: Bs. ${usdStr} | 💶 Euro: Bs. ${eurStr} | ₮ USDT: Bs. ${usdtStr}`;
+
+    await Notifications.scheduleNotificationAsync({
+      identifier: `bcv-daily-${Date.now()}`,
+      content: {
+        title,
+        body,
+        data: { type: "bcv-daily" },
+        ...(Platform.OS === "android" && { channelId: CHANNEL_ID }),
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: 1,
+        repeats: false,
+      },
+    });
+
+    await notificationHistoryService.addNotification({
+      title,
+      body,
+      type: "bcv"
+    });
+
+    await AsyncStorage.setItem(LAST_NOTIFIED_DATE_KEY, today);
+  } catch (error) {
+    console.error("Error in bcv background task:", error);
+  }
+}
+
+TaskManager.defineTask(TASK_NAME, async () => {
+  try {
+    const enabled = await AsyncStorage.getItem(ALERTS_ENABLED_KEY);
+    if (enabled !== "true") {
+      return BackgroundFetch.BackgroundFetchResult.NoData;
+    }
+    
+    await checkAndNotifyBcv();
+    return BackgroundFetch.BackgroundFetchResult.NewData;
+  } catch (error) {
+    return BackgroundFetch.BackgroundFetchResult.Failed;
+  }
+});
+
 export async function scheduleDailyRateNotifications(): Promise<void> {
-  await cancelDailyNotifications();
   const hasPermission = await requestNotificationPermissions();
   if (!hasPermission) return;
-  await ensureChannel();
 
-  await Notifications.scheduleNotificationAsync({
-    identifier: AM_ID,
-    content: {
-      title: "Actualización de Tasas BCV",
-      body: "Las tasas oficiales del BCV han sido actualizadas.",
-      ...(Platform.OS === "android" && { channelId: CHANNEL_ID }),
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DAILY,
-      hour: 8,
-      minute: 0,
-    },
-  });
+  await AsyncStorage.setItem(ALERTS_ENABLED_KEY, "true");
 
-  await Notifications.scheduleNotificationAsync({
-    identifier: PM_ID,
-    content: {
-      title: "Actualización de Tasas BCV",
-      body: "Las tasas oficiales del BCV han sido actualizadas.",
-      ...(Platform.OS === "android" && { channelId: CHANNEL_ID }),
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DAILY,
-      hour: 14,
-      minute: 0,
-    },
-  });
+  const isRegistered = await TaskManager.isTaskRegisteredAsync(TASK_NAME);
+  if (!isRegistered) {
+    await BackgroundFetch.registerTaskAsync(TASK_NAME, {
+      minimumInterval: 60 * 60 * 2, // 2 hours
+      stopOnTerminate: false,
+      startOnBoot: true,
+    });
+  }
+
+  // Initial check
+  await checkAndNotifyBcv();
+}
+
+export async function cancelDailyNotifications(): Promise<void> {
+  await AsyncStorage.setItem(ALERTS_ENABLED_KEY, "false");
+  
+  const isRegistered = await TaskManager.isTaskRegisteredAsync(TASK_NAME);
+  if (isRegistered) {
+    await BackgroundFetch.unregisterTaskAsync(TASK_NAME);
+  }
+}
+
+export async function areDailyNotificationsScheduled(): Promise<boolean> {
+  try {
+    const enabled = await AsyncStorage.getItem(ALERTS_ENABLED_KEY);
+    return enabled === "true";
+  } catch {
+    return false;
+  }
 }
 
 export async function sendTestNotification(rates: BcvRates): Promise<void> {
@@ -84,15 +148,18 @@ export async function sendTestNotification(rates: BcvRates): Promise<void> {
 
   await ensureChannel();
 
-  const usdStr = rates.USD > 0 ? `Bs. ${rates.USD.toFixed(2)}` : "—";
-  const eurStr = rates.EUR > 0 ? `Bs. ${rates.EUR.toFixed(2)}` : "—";
-  const usdtStr = rates.USDT > 0 ? `Bs. ${rates.USDT.toFixed(2)}` : "—";
+  const usdStr = rates.USD > 0 ? rates.USD.toFixed(2) : "—";
+  const eurStr = rates.EUR > 0 ? rates.EUR.toFixed(2) : "—";
+  const usdtStr = rates.USDT > 0 ? rates.USDT.toFixed(2) : "—";
+
+  const title = "🔔 Prueba de notificación — FinanzasIA";
+  const body = `💵 USD: Bs. ${usdStr} | 💶 EUR: Bs. ${eurStr} | ₮ USDT: Bs. ${usdtStr}`;
 
   await Notifications.scheduleNotificationAsync({
     identifier: "test-notification",
     content: {
-      title: "🔔 Prueba de notificación — FinanzasIA",
-      body: `💵 USD: ${usdStr}  |  💶 EUR: ${eurStr}  |  ₮ USDT: ${usdtStr}`,
+      title,
+      body,
       data: { type: "test" },
       ...(Platform.OS === "android" && { channelId: CHANNEL_ID }),
     },
@@ -103,19 +170,11 @@ export async function sendTestNotification(rates: BcvRates): Promise<void> {
     },
   });
 
+  await notificationHistoryService.addNotification({
+    title,
+    body,
+    type: "system"
+  });
+
   console.log("🧪 Notificación de prueba programada (en 5 segundos)");
-}
-
-// ─── CANCELAR NOTIFICACIONES ─────────────────────────────────────
-export async function cancelDailyNotifications(): Promise<void> {
-  await Notifications.cancelScheduledNotificationAsync(AM_ID).catch(() => {});
-  await Notifications.cancelScheduledNotificationAsync(PM_ID).catch(() => {});
-}
-
-// ─── VERIFICAR SI ESTÁN ACTIVAS ──────────────────────────────────
-export async function areDailyNotificationsScheduled(): Promise<boolean> {
-  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
-  return scheduled.some(
-    (n) => n.identifier === AM_ID || n.identifier === PM_ID
-  );
 }

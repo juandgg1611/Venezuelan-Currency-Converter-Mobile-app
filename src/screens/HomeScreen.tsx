@@ -32,6 +32,7 @@ import {
   areUsdtAlertsActive,
   checkUsdtMovement,
 } from "../services/usdtAlertTask";
+import { historyService } from "../services/history";
 import * as Clipboard from "expo-clipboard";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -263,7 +264,7 @@ const AnimatedSwitch = ({ active, activeColor }: { active: boolean; activeColor:
 };
 
 // ─── COMPONENTES DE MONEDA ───────────────────────────────────
-const CurrencyIcon = ({
+export const CurrencyIcon = ({
   currency,
   size = 48,
 }: {
@@ -373,7 +374,7 @@ const CurrencyPill = ({
 };
 
 // ─── CARD DE TASA ───────────────────────────────────
-const RateCard = ({
+export const RateCard = ({
   currency,
   value,
   source,
@@ -534,7 +535,7 @@ const MONTH_NAMES = [
 ];
 const DAY_NAMES = ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"];
 
-const CalendarModal = ({
+export const CalendarModal = ({
   visible,
   onClose,
   onSelectDate,
@@ -626,6 +627,8 @@ const CalendarModal = ({
     // Partir en semanas de 7
     const result: (number | null)[][] = [];
     for (let i = 0; i < flat.length; i += 7) result.push(flat.slice(i, i + 7));
+    // Rellenar con semanas vacías hasta llegar a 6 (altura constante)
+    while (result.length < 6) result.push(Array(7).fill(null));
     return result;
   }, [viewYear, viewMonth]);
 
@@ -1846,7 +1849,7 @@ const CalculatorModal = ({ visible, onClose, rates }: { visible: boolean; onClos
 };
 
 // ─── PANTALLA PRINCIPAL ─────────────────────────────────────
-export default function HomeScreen() {
+export default function HomeScreen({ navigation }: any) {
   const [amount, setAmount] = useState("1");
   const [fromCurrency, setFromCurrency] = useState<CurrencyCode>("USD");
   const [toCurrency, setToCurrency] = useState<CurrencyCode>("VES");
@@ -1951,7 +1954,7 @@ export default function HomeScreen() {
       setError(null);
       const result = await bcvApiService.fetchExchangeRates();
       setRates(result.rates);
-      if (result.rates?.lastUpdated) {
+      if (result.rates?.USDT > 0) historyService.appendUsdtEntry(result.rates.USDT).catch(() => {}); if (result.rates?.lastUpdated) {
         setLastUpdate(result.rates.lastUpdated);
       } else {
         setLastUpdate(new Date().toLocaleTimeString());
@@ -1960,6 +1963,7 @@ export default function HomeScreen() {
       // Check USDT movement for alerts (non-blocking)
       if (result.rates?.USDT > 0) {
         checkUsdtMovement(result.rates.USDT).catch(() => {});
+        historyService.appendUsdtEntry(result.rates.USDT).catch(() => {});
       }
     } catch (err) {
       setError("Error al cargar las tasas");
@@ -2025,8 +2029,12 @@ export default function HomeScreen() {
       }
 
       const hist = histList[0];
-      const currentUSDT = rates?.USDT ?? 0;
-      const converted = bcvApiService.historicalToBcvRates(hist, currentUSDT);
+      const [y, m] = resolved.split("-").map(Number);
+      const historyMonth = await historyService.getHistory(y, m);
+      const usdtSnap = historyMonth.find(s => s.date === resolved);
+      const historicalUSDT = usdtSnap && usdtSnap.usdt > 0 ? usdtSnap.usdt : (rates?.USDT ?? 0);
+
+      const converted = bcvApiService.historicalToBcvRates(hist, historicalUSDT);
 
       // Si fue fin de semana, anotamos en lastUpdated la fecha real para el banner
       if (wasWeekend) {
@@ -2064,7 +2072,7 @@ export default function HomeScreen() {
       setRefreshing(true);
       const result = await bcvApiService.refreshRates();
       setRates(result.rates);
-      if (result.rates?.lastUpdated) {
+      if (result.rates?.USDT > 0) historyService.appendUsdtEntry(result.rates.USDT).catch(() => {}); if (result.rates?.lastUpdated) {
         setLastUpdate(result.rates.lastUpdated);
       }
       if (result.error) {
@@ -2286,11 +2294,12 @@ export default function HomeScreen() {
         {/* HEADER */}
         <FadeSlide style={styles.header}>
           <View style={styles.brandRow}>
-            <View style={[styles.brandOrb, { borderColor: G.p200 }]}>
-              <PulseAnimation>
-                <Ionicons name="analytics" size={24} color={G.p200} />
-              </PulseAnimation>
-            </View>
+            {/* Menu Button */}
+            <TouchableOpacity onPress={() => (navigation as any).openDrawer()} style={{ paddingRight: 12 }}>
+              <Ionicons name="menu" size={32} color={G.p200} />
+            </TouchableOpacity>
+            
+            <Image source={require("../../assets/icon.png")} style={{ width: 34, height: 34, borderRadius: 8, marginRight: 8 }} resizeMode="contain" />
             <View>
               <Text style={styles.brandName}>FinanzasIA</Text>
               <View style={styles.brandTagRow}>
@@ -2319,36 +2328,13 @@ export default function HomeScreen() {
 
           <View style={{ flexDirection: "row", gap: 8 }}>
             {/* Botón calendario */}
-            <TouchableOpacity
-              style={[
-                styles.refreshBtn,
-                isHistoricalMode && {
-                  borderColor: G.warning,
-                  backgroundColor: G.warning + "15",
-                },
-              ]}
-              onPress={() => setCalendarVisible(true)}
-              disabled={historicalLoading}
-            >
-              {historicalLoading ? (
-                <ActivityIndicator size="small" color={G.warning} />
-              ) : (
-                <Ionicons
-                  name={isHistoricalMode ? "calendar" : "calendar-outline"}
-                  size={20}
-                  color={isHistoricalMode ? G.warning : G.p200}
-                />
-              )}
+            <TouchableOpacity onPress={() => setCalendarVisible(true)} style={styles.refreshBtn}>
+              <Ionicons name="calendar-outline" size={20} color={G.p200} />
             </TouchableOpacity>
 
             {/* Menú de Notificaciones */}
             <View>
-              <TouchableOpacity
-                style={styles.refreshBtn}
-                onPress={() => setNotifMenuOpen(true)}
-              >
-                <Ionicons name={(notificationsOn || usdtAlertsOn) ? "notifications" : "notifications-outline"} size={20} color={G.p200} />
-              </TouchableOpacity>
+              
               
               <Modal visible={notifMenuOpen} transparent animationType="fade" onRequestClose={() => setNotifMenuOpen(false)}>
                 <TouchableOpacity style={{ flex: 1 }} onPress={() => setNotifMenuOpen(false)} activeOpacity={1}>
@@ -2775,11 +2761,11 @@ export default function HomeScreen() {
               source={isHistoricalMode ? "BCV hist." : "BCV"}
               delay={180}
             />
-            {!isHistoricalMode && (
+            {(!isHistoricalMode || activeRates.USDT > 0) && (
               <RateCard
                 currency="USDT"
                 value={activeRates.USDT}
-                source={activeRates.usdtSource || "Binance"}
+                source={isHistoricalMode ? "Binance hist." : (activeRates.usdtSource || "Binance")}
                 delay={210}
               />
             )}

@@ -28,7 +28,7 @@
       "bundleIdentifier": "com.finanzasia.app"
     },
     "android": {
-      "backgroundColor": "#013125",
+      "backgroundColor": "#0d0d0d",
       "package": "com.finanzasia.app",
       "permissions": [
         "INTERNET",

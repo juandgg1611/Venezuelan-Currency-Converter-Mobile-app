@@ -5,6 +5,7 @@ import * as BackgroundFetch from "expo-background-fetch";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
+import { notificationHistoryService } from "./notificationHistory";
 
 // ─── CONSTANTES ──────────────────────────────────────────────
 const TASK_NAME = "usdt-price-monitor";
@@ -138,11 +139,14 @@ export async function checkUsdtMovement(
           : "Buen momento para comprar";
       const sign = changePct > 0 ? "+" : "";
 
+      const title = `${emoji} USDT ${direction} ${sign}${changePct.toFixed(2)}%`;
+      const body = `Bs. ${lastPrice.toFixed(2)} → Bs. ${price.toFixed(2)} | ${advice}`;
+
       await Notifications.scheduleNotificationAsync({
         identifier: `usdt-alert-${Date.now()}`,
         content: {
-          title: `${emoji} USDT ${direction} ${sign}${changePct.toFixed(2)}%`,
-          body: `Bs. ${lastPrice.toFixed(2)} → Bs. ${price.toFixed(2)} | ${advice}`,
+          title,
+          body,
           data: { type: "usdt-alert", price, lastPrice, changePct },
           ...(Platform.OS === "android" && { channelId: CHANNEL_ID }),
         },
@@ -151,6 +155,12 @@ export async function checkUsdtMovement(
           seconds: 1,
           repeats: false,
         },
+      });
+
+      await notificationHistoryService.addNotification({
+        title,
+        body,
+        type: "usdt"
       });
 
       // Actualizar precio de referencia
