@@ -556,13 +556,21 @@ export const CalendarModal = ({
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [mounted, setMounted] = useState(false);
   const [monthStats, setMonthStats] = useState<any[] | null>(null);
+  const [loadingStats, setLoadingStats] = useState(false);
 
   useEffect(() => {
     let cancel = false;
+    setLoadingStats(true);
     historyService.getHistory(viewYear, viewMonth + 1).then((data) => {
-      if (!cancel) setMonthStats(data);
+      if (!cancel) {
+        setMonthStats(data);
+        setLoadingStats(false);
+      }
     }).catch(() => {
-      if (!cancel) setMonthStats(null);
+      if (!cancel) {
+        setMonthStats(null);
+        setLoadingStats(false);
+      }
     });
     return () => { cancel = true; };
   }, [viewYear, viewMonth]);
@@ -679,7 +687,7 @@ export const CalendarModal = ({
 
   const isBankHoliday = useCallback(
     (day: number) => {
-      if (!monthStats) return false;
+      if (!monthStats || loadingStats) return false;
       if (isFuture(day)) return false;
       const dow = new Date(viewYear, viewMonth, day).getDay();
       if (dow !== 1) return false; // Solo lunes
