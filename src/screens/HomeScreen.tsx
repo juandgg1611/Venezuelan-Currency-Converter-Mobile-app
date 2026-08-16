@@ -680,13 +680,15 @@ export const CalendarModal = ({
   const isBankHoliday = useCallback(
     (day: number) => {
       if (!monthStats) return false;
+      if (isFuture(day)) return false;
       const dow = new Date(viewYear, viewMonth, day).getDay();
       if (dow !== 1) return false; // Solo lunes
       const ds = formatDateStr(day);
       const snap = monthStats.find((s: any) => s.date === ds);
-      return snap && snap.usd === 0;
+      const val = snap ? snap.usd : 0;
+      return val === 0;
     },
-    [monthStats, viewYear, viewMonth, formatDateStr]
+    [monthStats, viewYear, viewMonth, isFuture, formatDateStr]
   );
 
   const isSelected = useCallback(
