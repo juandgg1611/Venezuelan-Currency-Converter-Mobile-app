@@ -30,6 +30,11 @@
     "android": {
       "backgroundColor": "#0d0d0d",
       "package": "com.finanzasia.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#0d0d0d"
+      },
       "permissions": [
         "INTERNET",
         "ACCESS_NETWORK_STATE",

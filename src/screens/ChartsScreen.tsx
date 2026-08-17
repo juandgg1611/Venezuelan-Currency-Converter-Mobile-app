@@ -579,6 +579,7 @@ const styles = StyleSheet.create({
   chartHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 },
   iconBox: { width: 30, height: 30, borderRadius: 8, justifyContent: "center", alignItems: "center" },
   chartTitle: { color: G.t100, fontSize: 16, fontWeight: "700" },
+  chartStyle: { borderRadius: 12, marginTop: 10 },
 
   tooltipContainer: { position: "absolute", backgroundColor: "rgba(0,0,0,0.8)", padding: 8, borderRadius: 12, borderWidth: 1, borderColor: G.p200, alignItems: "center", zIndex: 100 },
   tooltipValue: { color: G.t100, fontSize: 14, fontWeight: "900" },
