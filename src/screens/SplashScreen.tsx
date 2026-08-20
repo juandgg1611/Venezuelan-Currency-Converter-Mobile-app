@@ -13,8 +13,18 @@ interface SplashScreenProps {
   onFinish: () => void;
 }
 
+import { bcvApiService } from '../services/api';
+
 export default function SplashScreen({ onFinish }: SplashScreenProps) {
   useEffect(() => {
+    // 1. Cargar caché offline a memoria lo más rápido posible
+    bcvApiService.getOfflineCache().then(r => {
+      if (r) bcvApiService.setMemoryCache(r);
+    });
+    
+    // 2. Disparar el fetch de tasas frescas en background
+    bcvApiService.fetchExchangeRates().catch(() => {});
+
     const timer = setTimeout(() => {
       onFinish();
     }, 2500); // 2.5 seconds splash

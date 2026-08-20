@@ -1896,8 +1896,8 @@ export default function HomeScreen({ navigation }: any) {
   const [fromCurrency, setFromCurrency] = useState<CurrencyCode>("USD");
   const [toCurrency, setToCurrency] = useState<CurrencyCode>("VES");
   const [swapRotation, setSwapRotation] = useState(0);
-  const [rates, setRates] = useState<BcvRates | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [rates, setRates] = useState<BcvRates | null>(() => bcvApiService.getMemoryCache());
+  const [loading, setLoading] = useState(!bcvApiService.getMemoryCache());
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<string>("");
@@ -1965,14 +1965,24 @@ export default function HomeScreen({ navigation }: any) {
   const isHistoricalMode = !!historicalDate && !!historicalRates;
 
   const showUsdt = !isHistoricalMode || (historicalDate && new Date(historicalDate + "T12:00:00") >= new Date("2026-01-24T00:00:00") && (activeRates?.USDT ?? 0) > 0);
-  const availableCurrencies = CURRENCIES.filter(c => c !== "USDT" || showUsdt);
+  const showBcv = !isHistoricalMode || ((activeRates?.USD ?? 0) > 0);
+
+  const availableCurrencies = CURRENCIES.filter(c => {
+    if (c === "USDT") return showUsdt;
+    if (c === "USD" || c === "EUR") return showBcv;
+    return true; // VES
+  });
 
   useEffect(() => {
     if (!showUsdt) {
       if (fromCurrency === "USDT") setFromCurrency("USD");
       if (toCurrency === "USDT") setToCurrency("VES");
     }
-  }, [showUsdt]);
+    if (!showBcv) {
+      if (fromCurrency === "USD" || fromCurrency === "EUR") setFromCurrency(showUsdt ? "USDT" : "VES");
+      if (toCurrency === "USD" || toCurrency === "EUR") setToCurrency("VES");
+    }
+  }, [showUsdt, showBcv]);
 
   // Ref para captura de pantalla (exportar JPG)
   const resultBoxRef = useRef<View>(null);
@@ -2006,7 +2016,10 @@ export default function HomeScreen({ navigation }: any) {
 
   const loadRates = useCallback(async (silent = false) => {
     try {
-      if (!silent) setLoading(true);
+      // Si tenemos caché en memoria, no mostramos el spinner inicial
+      if (!silent && !bcvApiService.getMemoryCache()) {
+        setLoading(true);
+      }
       setError(null);
       const result = await bcvApiService.fetchExchangeRates();
       setRates(result.rates);
@@ -2063,43 +2076,76 @@ export default function HomeScreen({ navigation }: any) {
       setHistoricalLoading(true);
       setHistoricalError(null);
 
-      const { resolved, wasWeekend } = resolveToWeekday(dateStr);
-
-      setHistoricalDate(dateStr); // fecha que el usuario eligió (para mostrar en banner)
-      setResolvedDate(resolved); // fecha real consultada en la API
-
-      const histList = await bcvApiService.fetchHistoricalRates(
-        resolved,
-        resolved,
-      );
-
-      if (!histList || histList.length === 0) {
-        // Feriado bancario en la fecha resuelta
-        setHistoricalError(
-          "Día feriado bancario sin tasa BCV. Elige otro día.",
-        );
-        setHistoricalRates(null);
-        setHistoricalDate(null);
-        setResolvedDate(null);
-        return;
-      }
-
-      const hist = histList[0];
-      const [y, m] = dateStr.split("-").map(Number); // Fetch the month for the un-resolved date
+      // Obtener USDT de la fecha exacta
+      const [y, m] = dateStr.split("-").map(Number);
       const historyMonth = await historyService.getHistory(y, m);
       const usdtSnap = historyMonth.find(s => s.date === dateStr);
-      const historicalUSDT = usdtSnap?.usdt || 0; // No fallback to live rates
+      const historicalUSDT = usdtSnap?.usdt || 0;
 
-      const converted = bcvApiService.historicalToBcvRates(hist, historicalUSDT);
+      // Buscar si el BCV tiene datos para la fecha EXACTA
+      let histList = await bcvApiService.fetchHistoricalRates(dateStr, dateStr);
 
-      // Si fue fin de semana, anotamos en lastUpdated la fecha real para el banner
-      if (wasWeekend) {
-        const resolvedDisplay = new Date(
-          resolved + "T12:00:00",
-        ).toLocaleDateString("es-VE", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
+      let finalDateStr = dateStr;
+      let finalWasWeekend = false;
+
+      if (!histList || histList.length === 0) {
+        // No hay BCV para esa fecha exacta (fin de semana, feriado bancario)
+        if (historicalUSDT > 0) {
+          // Si hay USDT en esa fecha sin BCV, mostramos SOLO el USDT (ocultando BCV)
+          setHistoricalDate(dateStr);
+          setResolvedDate(dateStr);
+          const converted: BcvRates = {
+            USD: 0,
+            EUR: 0,
+            USDT: historicalUSDT,
+            VES: 1.0,
+            lastUpdated: new Date(dateStr + "T12:00:00").toLocaleDateString("es-VE", {
+              day: "2-digit", month: "2-digit", year: "numeric"
+            }),
+            usdtSource: "Histórico",
+          };
+          setHistoricalRates(converted);
+          setCalendarVisible(false);
+          return;
+        } else {
+          // Si TAMPOCO hay USDT (ej: antes de diciembre 2025 o error), hacemos el comportamiento antiguo
+          // de buscar el día hábil más cercano para al menos mostrar algo útil (BCV del lunes)
+          const { resolved, wasWeekend } = resolveToWeekday(dateStr);
+          finalDateStr = resolved;
+          finalWasWeekend = wasWeekend;
+          
+          histList = await bcvApiService.fetchHistoricalRates(resolved, resolved);
+          
+          if (!histList || histList.length === 0) {
+            setHistoricalError("Día feriado bancario sin tasa BCV. Elige otro día.");
+            setHistoricalRates(null);
+            setHistoricalDate(null);
+            setResolvedDate(null);
+            return;
+          }
+        }
+      }
+
+      // Si llegamos aquí, o encontramos BCV en la fecha exacta, o lo encontramos desplazado a día hábil.
+      setHistoricalDate(dateStr);
+      setResolvedDate(finalDateStr);
+
+      const hist = histList[0];
+      
+      // Si tuvimos que desplazar al lunes (y no había USDT original), 
+      // ¿qué USDT le ponemos al lunes? (el usuario prefiere que el fin de semana muestre 0 de USDT si no hay,
+      // pero si se desplazó al lunes, le ponemos el USDT del lunes si es que hay).
+      let finalUSDT = historicalUSDT;
+      if (finalUSDT === 0 && finalDateStr !== dateStr) {
+        const shiftedUsdtSnap = historyMonth.find(s => s.date === finalDateStr);
+        finalUSDT = shiftedUsdtSnap?.usdt || 0;
+      }
+
+      const converted = bcvApiService.historicalToBcvRates(hist, finalUSDT);
+
+      if (finalWasWeekend) {
+        const resolvedDisplay = new Date(finalDateStr + "T12:00:00").toLocaleDateString("es-VE", {
+          day: "2-digit", month: "2-digit", year: "numeric",
         });
         converted.lastUpdated = resolvedDisplay;
       }
@@ -2812,18 +2858,22 @@ export default function HomeScreen({ navigation }: any) {
           </View>
         ) : activeRates ? (
           <View style={styles.ratesList}>
-            <RateCard
-              currency="USD"
-              value={activeRates.USD}
-              source={isHistoricalMode ? "BCV hist." : "BCV"}
-              delay={150}
-            />
-            <RateCard
-              currency="EUR"
-              value={activeRates.EUR}
-              source={isHistoricalMode ? "BCV hist." : "BCV"}
-              delay={180}
-            />
+            {showBcv && (
+              <>
+                <RateCard
+                  currency="USD"
+                  value={activeRates.USD}
+                  source={isHistoricalMode ? "BCV hist." : "BCV"}
+                  delay={150}
+                />
+                <RateCard
+                  currency="EUR"
+                  value={activeRates.EUR}
+                  source={isHistoricalMode ? "BCV hist." : "BCV"}
+                  delay={180}
+                />
+              </>
+            )}
             {showUsdt && (
               <RateCard
                 currency="USDT"

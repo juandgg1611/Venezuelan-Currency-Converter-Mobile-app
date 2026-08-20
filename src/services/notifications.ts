@@ -61,8 +61,8 @@ async function checkAndNotifyBcv(): Promise<void> {
     const eurStr = rates.EUR > 0 ? rates.EUR.toFixed(2) : "—";
     const usdtStr = rates.USDT > 0 ? rates.USDT.toFixed(2) : "—";
 
-    const title = "Actualización de Tasas 🇻🇪";
-    const body = `💵 Dólar: Bs. ${usdStr} | 💶 Euro: Bs. ${eurStr} | ₮ USDT: Bs. ${usdtStr}`;
+    const title = "Actualizacion de Tasas";
+    const body = `Dolar: Bs. ${usdStr} | Euro: Bs. ${eurStr} | USDT: Bs. ${usdtStr}`;
 
     await Notifications.scheduleNotificationAsync({
       identifier: `bcv-daily-${Date.now()}`,

@@ -60,12 +60,23 @@ class BcvApiService {
   // CACHÉ
   // ==========================================
 
+  private memoryCache: BcvRates | null = null;
+
+  getMemoryCache(): BcvRates | null {
+    return this.memoryCache;
+  }
+
+  setMemoryCache(rates: BcvRates) {
+    this.memoryCache = rates;
+  }
+
   private async saveToCache(rates: BcvRates): Promise<void> {
     try {
       const payload = JSON.stringify({ rates, savedAt: Date.now() });
       await AsyncStorage.setItem(CACHE_KEY, payload);
       // Guardar también en caché offline permanente (sin expiración)
       await AsyncStorage.setItem(OFFLINE_CACHE_KEY, JSON.stringify({ rates, savedAt: Date.now() }));
+      this.memoryCache = rates;
     } catch (e) {
       console.log("❌ Cache save error:", e);
     }
@@ -78,6 +89,7 @@ class BcvApiService {
       const data = JSON.parse(raw);
       if (Date.now() - data.savedAt < CACHE_DURATION) {
         console.log("✅ Rates from cache");
+        this.memoryCache = data.rates;
         return data.rates;
       }
       return null;
@@ -92,6 +104,7 @@ class BcvApiService {
       if (!raw) return null;
       const data = JSON.parse(raw);
       console.log("📦 Rates from offline cache (sin conexión)");
+      this.memoryCache = data.rates;
       return data.rates;
     } catch (e) {
       return null;

@@ -13,7 +13,7 @@ const CHANNEL_ID = "finanzas-ia-usdt";
 const LAST_PRICE_KEY = "@usdt_last_alert_price";
 const ALERTS_ENABLED_KEY = "@usdt_alerts_enabled";
 const THRESHOLD_KEY = "@usdt_alert_threshold";
-const DEFAULT_THRESHOLD = 0.5; // 0.5% de variación mínima para notificar
+const DEFAULT_THRESHOLD = 0.1; // 0.1% de variación mínima para notificar (más precisión)
 
 const BINANCE_P2P_URL =
   "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search";
@@ -132,15 +132,14 @@ export async function checkUsdtMovement(
       await ensureUsdtChannel();
 
       const direction = changePct > 0 ? "subió" : "bajó";
-      const emoji = changePct > 0 ? "📈" : "📉";
       const advice =
         changePct > 0
           ? "Buen momento para vender"
           : "Buen momento para comprar";
       const sign = changePct > 0 ? "+" : "";
 
-      const title = `${emoji} USDT ${direction} ${sign}${changePct.toFixed(2)}%`;
-      const body = `Bs. ${lastPrice.toFixed(2)} → Bs. ${price.toFixed(2)} | ${advice}`;
+      const title = `USDT ${direction} ${sign}${changePct.toFixed(2)}%`;
+      const body = `Bs. ${lastPrice.toFixed(2)} -> Bs. ${price.toFixed(2)} | ${advice}`;
 
       await Notifications.scheduleNotificationAsync({
         identifier: `usdt-alert-${Date.now()}`,
@@ -194,7 +193,7 @@ export async function scheduleUsdtAlerts(): Promise<void> {
   const isRegistered = await TaskManager.isTaskRegisteredAsync(TASK_NAME);
   if (!isRegistered) {
     await BackgroundFetch.registerTaskAsync(TASK_NAME, {
-      minimumInterval: 15 * 60, // 15 minutos mínimo
+      minimumInterval: 5 * 60, // 5 minutos mínimo
       stopOnTerminate: false,
       startOnBoot: true,
     });

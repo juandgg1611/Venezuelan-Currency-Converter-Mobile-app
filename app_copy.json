@@ -1,0 +1,58 @@
+{
+  "expo": {
+    "name": "Silueta",
+    "slug": "Movil_App",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "silueta",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "icon": "./assets/expo.icon"
+    },
+    "android": {
+      "package": "com.juand.movilapp",
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff",
+        "foregroundImage": "./assets/images/icon.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#ffffff",
+          "android": {
+            "image": "./assets/images/splash-icon.png",
+            "imageWidth": 200
+          }
+        }
+      ],
+      "expo-web-browser",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Permite acceder a la cámara para escanear etiquetas QR de los productos."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Permite guardar las etiquetas QR de los productos en tu galería.",
+          "savePhotosPermission": "Permite guardar las etiquetas QR de los productos en tu galería.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
